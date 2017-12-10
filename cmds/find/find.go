@@ -18,12 +18,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/u-root/u-root/pkg/find"
 )
-
-const cmd = "find [opts] starting-at-path"
 
 var (
 	perm      = flag.Int("mode", -1, "Permissions")
@@ -40,21 +39,17 @@ var (
 )
 
 func init() {
-	defUsage := flag.Usage
 	flag.Usage = func() {
-		os.Args[0] = cmd
-		defUsage()
+		fmt.Fprintf(os.Stderr, "Usage of %s [opts] path:\n", filepath.Base(os.Args[0]))
+		flag.CommandLine.PrintDefaults()
 		os.Exit(1)
 	}
 }
 
 func main() {
 	flag.Parse()
-	a := flag.Args()
-	if len(a) != 1 {
-		flag.Usage()
-	}
-	root := a[0]
+	args := flag.Args()
+
 	var mask, mode os.FileMode
 	if *perm != -1 {
 		mask = os.ModePerm
@@ -73,30 +68,32 @@ func main() {
 		mask |= os.ModeType
 	}
 
-	f, err := find.New(func(f *find.Finder) error {
-		f.Root = root
-		f.Pattern = *name
-		f.ModeMask = mask
-		f.Mode = mode
-		if *debug {
-			f.Debug = log.Printf
+	for _, root := range args {
+		f, err := find.New(func(f *find.Finder) error {
+			f.Root = root
+			f.Pattern = *name
+			f.ModeMask = mask
+			f.Mode = mode
+			if *debug {
+				f.Debug = log.Printf
+			}
+			return nil
+		})
+		if err != nil {
+			log.Fatal(err)
 		}
-		return nil
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-	go f.Find()
-	for l := range f.Names {
-		if l.Err != nil {
-			fmt.Fprintf(os.Stderr, "%v: %v\n", l.Name, l.Err)
-			continue
+		go f.Find()
+		for l := range f.Names {
+			if l.Err != nil {
+				fmt.Fprintf(os.Stderr, "%v: %v\n", l.Name, l.Err)
+				continue
+			}
+			// TODO: get long listing formats out of ls and into a package.
+			if *long {
+				fmt.Printf("%v\n", l.FileInfo)
+				continue
+			}
+			fmt.Printf("%s\n", l.Name)
 		}
-		// TODO: get long listing formats out of ls and into a package.
-		if *long {
-			fmt.Printf("%v\n", l.FileInfo)
-			continue
-		}
-		fmt.Printf("%s\n", l.Name)
 	}
 }
