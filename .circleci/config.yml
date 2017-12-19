@@ -38,11 +38,24 @@ jobs:
             cd vendor/github.com/golang/dep/cmd/dep
             go install
       - run:
+          name: Install everycommit
+          command: go get github.com/bensallen/everycommit
+      - run:
           name: Check vendored dependencies
-          command: dep status
+          command: >
+            if [ -n "${CIRCLE_PULL_REQUEST:-}" ]; then
+              everycommit -u "${CIRCLE_PULL_REQUEST}" -r /go/src/github.com/u-root/u-root -- dep status
+            else
+              dep status
+            fi
       - run:
           name: Go vet
-          command: go tool vet cmds pkg
+          command: >
+            if [ -n "${CIRCLE_PULL_REQUEST:-}" ]; then
+              everycommit -u "${CIRCLE_PULL_REQUEST}" -r /go/src/github.com/u-root/u-root -- go tool vet cmds pkg
+            else
+              go tool vet cmds pkg
+            fi
   test_cmds:
     docker:
       - image: circleci/golang:latest
@@ -54,8 +67,12 @@ jobs:
       - run:
           name: Test cmds
           command: |
-            cd cmds
-            go test -a -installsuffix uroot -ldflags '-s' ./...
+            if [ -n "${CIRCLE_PULL_REQUEST:-}" ]; then
+              everycommit -u "${CIRCLE_PULL_REQUEST}" -r /go/src/github.com/u-root/u-root -d /go/src/github.com/u-root/u-root/cmds -- go test -a -installsuffix uroot -ldflags '-s' ./...
+            else
+              cd cmds
+              go test -a -installsuffix uroot -ldflags '-s' ./...
+            fi
       - run:
           name: Test coverage of cmds
           command: |
